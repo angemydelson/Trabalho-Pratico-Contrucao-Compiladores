@@ -4,6 +4,7 @@
 import xml.etree.ElementTree as ET
 import re
 import sys
+import csv
 sys.setrecursionlimit(3000)
 
 # print(sys.getrecursionlimit())
@@ -99,7 +100,7 @@ class Automato(object):         #carga do automato finito
                     novaTransicao(self, word[1], word[3])           #add uma nova transição à regra ativa
                     word = ''                                                
 
-                elif (re.match('\|<\S>', word) is not None or re.match('=<\S>', word) is not None):     #se palavra tem formato de um nome de regra e está no meio da regra 
+                elif (re.match('\|<\S>', word) is not None or re.match('=<\S>', word) is not None):     #se palavra tem formato de um nome de regra e está no meio da regra
                     novaTransicao(self, self.EPSILON, word[2])      #add uma nova épsilon transição à regra ativa
                     word = ''                                                  
 
@@ -137,7 +138,23 @@ class Automato(object):         #carga do automato finito
                 if len(transicoes) > 0:                             #se existir transições para símbolo
                     print(simbolo, transicoes, end=', ')            #imprime símbolo e lista de transições
             print('')        
-   
+
+    def salvarCSV(self, nome_arquivo):
+        simbolos = set()
+        estados = self.pegarAutomato()
+        for nome, estado in estados.items():
+            for simbolo, transicoes in estado.items():
+                simbolos.add(simbolo)
+
+        with open(f"../materials/{nome_arquivo}.csv", "w", newline="") as csvFile:
+            writer = csv.writer(csvFile, delimiter=",")
+            writer.writerow(["*"] + sorted(simbolos))
+
+            for nome, estado in sorted(self.pegarAutomato().items()):
+                linha = [f"{'*' if nome in self.Finais else ''}{nome}"]
+                transicoes = dict(estado.items())
+                linha.extend(f"{transicoes[s]}" if s in transicoes else "-" for s in sorted(simbolos))
+                writer.writerow(linha)
 
     def setAlfabetoEstado(self, estado):    #em um estado é inserido todos os símbolos do alfabeto
         for simbolo in sorted(self.Alfabeto):   #percorre os símbolos do alfabeto da linguagem
@@ -503,5 +520,6 @@ class Mortos(Inuteis):
 
 semMortos = Mortos(semInalcancaveis)   
 semMortos.removerMortos()
-print ('-==========- Imprimir o autômato após a remoção dos mortos -==========-')   
-semMortos.imprimir() 
+print ('-==========- Imprimir o autômato após a remoção dos mortos -==========-')
+semMortos.salvarCSV('afnd')
+semMortos.imprimir()
