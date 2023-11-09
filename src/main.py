@@ -523,3 +523,143 @@ semMortos.removerMortos()
 print ('-==========- Imprimir o autômato após a remoção dos mortos -==========-')
 semMortos.salvarCSV('afnd')
 semMortos.imprimir()
+
+############################## Analisadores léxico e sintático ##############################
+class Analise(Inuteis):
+    def __init__(self, automato):
+        super(Analise, self).__init__(automato)
+    
+    def compiler(self):
+        
+        from scanner_dependencies import token_delimiters, keyword_list, integers_number, variables, alfa
+        
+        token_delimiters = token_delimiters()
+        
+        def get_word_type(word):
+            token_type = "ID"
+            if integers_number.match(word):
+                token_type = "Number"
+            elif word in keyword_list():
+                token_type = "Keyword"
+            elif word in token_delimiters[0]:
+                token_type = f"ARITH({token_delimiters[0][word]})"
+            elif word in token_delimiters[1]:
+                token_type = f"RELAT({token_delimiters[1][word]})"
+            elif word in token_delimiters[2]:
+                token_type = f"DELIM({token_delimiters[2][word]})"
+            return token_type
+        
+        def scanner():
+            automata = self.pegarAutomato()
+            has_error = False
+            symbols_table = []
+            word = ''
+            state = 0
+            delimiters = set([" ","\n","\t"])
+            custom = set([" ","if","else","print", "while", "-","*","/", "+:","+:=",":-",":-=", "=","==","(",")", "!=","!","{","}"])
+            for index, line in enumerate(list(open('../materials/input_code.txt'))):
+                current_line = str(index+1)
+                column = 0
+                if not line.endswith(" "):
+                    line = line+" "
+                for char in line:
+                    if char in delimiters and word:
+                        column += 1 
+                        flag = True if word.lstrip() in custom or word == ' ' else False
+                        if not flag and state not in list(self.Finais): state = -1
+                        
+                        if len(word) > 1:
+                            word_type = get_word_type(word.strip('\n').lstrip())
+                            symbols_table.append({'Line': int(current_line),  'Column': column, 'State': state, 'Label': word.strip('\n').lstrip(), 'Type': word_type})
+                        state = 0
+                        word = ' ' 
+                    else: 
+                        try:
+                            state = automata[state][char][0]
+                        except KeyError:
+                            state = -1
+                        if char: word += char                          
+                                  
+            for error in symbols_table:
+                if error['State'] == -1:
+                    print(f"(LexicalError) --> Token {error['Label']} at position: file[{error['Line']}, {error['Column']}] is not valid")
+                    has_error = True
+            if has_error: exit()
+            return symbols_table
+        
+        def parser(s_table):
+            tree = ET.parse('../materials/parser.xml')
+            root = tree.getroot()
+
+            symbols = [ {'Name':s.get('Name'), 'Index':s.get('Index'), 'Type':s.get('Type')} for s in root.iter('Symbol')]  
+            productions = [ {'Index':s.get('Index'), 'SymbolCount':s.get('SymbolCount'), 'NonTerminalIndex':s.get('NonTerminalIndex')} for s in root.iter('Production')]    
+            
+            lalr_table = []
+            for lalr_state in root.iter('LALRState'):
+                lalr_table.append({})
+                for lalr_action in lalr_state:
+                    lalr_table[int(lalr_state.get('Index'))][lalr_action.get('SymbolIndex')] = {'Action':lalr_action.get('Action'), 'Value':lalr_action.get('Value')}
+        
+            def table_mapping():
+                for symbol in symbols:
+                    symbol_name = symbol['Name']
+                    symbol_state = symbol['Index']
+                    for x in s_table:
+                        label_name = x['Label'].lstrip()
+                        if label_name == symbol_name:
+                            x['State'] = symbol_state 
+                        elif len(label_name) > 0 and label_name[0] == '_' and symbol_name == '_ID':
+                            x['State'] = symbol_state   
+                            
+                s_table.append({"Line": "EOF", "Column": "EOC", "State": "0", "Label": "$", "Type": "EOF"})      
+                fita = [int(symb_['State']) for symb_ in s_table]  
+                return (s_table, fita)
+           
+            table, ribbon = table_mapping()
+            
+            stack = [0]
+            while True:
+                try:
+                    action = lalr_table[int(stack[0])][str(ribbon[0])]
+                except KeyError as e:
+                    #retornar infos do token que ocasionou o erro sintático
+                    error = {"line": '' , "label": ''}
+                    for index, tab in enumerate(table):
+                        if str(tab['State']) == str(e.args[0]):
+                            if tab['Label'] == '$': tab = table[index-1]
+                            error.update({"line": tab['Line'], "column": tab['Column'] , "label": tab['Label']})
+                            break
+                    try: 
+                        print(f"(SyntaxError) --> Token {error['label'].lstrip()} at position: file[{error['line']}, {error['column']}] is not valid")
+                    except KeyError as e:
+                        print(f"Erro no código principal --> Verifique o arquivo de entrada se contiver espaço no final")
+                    break
+                
+                current_action = int(action['Action'])
+                if current_action == 1:
+                    stack.insert(0, ribbon[0])
+                    stack.insert(0, action['Value'])
+                    ribbon.pop(0)
+                    
+                elif current_action == 2:
+                    prod = productions[int(action['Value'])]
+                    countSymbol = int(prod['SymbolCount']) * 2
+                    for i in range(countSymbol): stack.pop(0)
+                       
+                    stack.insert(0, prod['NonTerminalIndex'])
+                    goto = lalr_table[int(stack[1])][stack[0]]['Value']
+                    stack.insert(0, goto)
+                    
+                elif current_action == 3:
+                    print('Action 3')
+                    exit()
+                    pass 
+                
+                elif current_action == 4:
+                    print('OK -> Accepted')
+                    return table
+        
+        parser(scanner())
+                
+analise = Analise(semInalcancaveis)
+analise.compiler()
