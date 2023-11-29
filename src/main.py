@@ -558,6 +558,9 @@ class Analise(Inuteis):
             delimiters = set([" ","\n","\t"])
             custom = set([" ","if","else","print", "while", "-","*","/", "+:","+:=",":-",":-=", "=","==","(",")", "!=","!","{","}"])
             for index, line in enumerate(list(open('../materials/input_code.txt'))):
+                if line.startswith('#'):
+                    continue
+
                 current_line = str(index+1)
                 column = 0
                 if not line.endswith(" "):
@@ -623,7 +626,7 @@ class Analise(Inuteis):
                     action = lalr_table[int(stack[0])][str(ribbon[0])]
                 except KeyError as e:
                     #retornar infos do token que ocasionou o erro sintático
-                    error = {"line": '' , "label": ''}
+                    error = {"line": '', "label": ''}
                     for index, tab in enumerate(table):
                         if str(tab['State']) == str(e.args[0]):
                             if tab['Label'] == '$': tab = table[index-1]
@@ -636,12 +639,12 @@ class Analise(Inuteis):
                     break
                 
                 current_action = int(action['Action'])
-                if current_action == 1:
+                if current_action == 1:  # Empilha
                     stack.insert(0, ribbon[0])
                     stack.insert(0, action['Value'])
                     ribbon.pop(0)
-                    
-                elif current_action == 2:
+
+                elif current_action == 2:  # Reduz
                     prod = productions[int(action['Value'])]
                     countSymbol = int(prod['SymbolCount']) * 2
                     for i in range(countSymbol): stack.pop(0)
@@ -649,16 +652,16 @@ class Analise(Inuteis):
                     stack.insert(0, prod['NonTerminalIndex'])
                     goto = lalr_table[int(stack[1])][stack[0]]['Value']
                     stack.insert(0, goto)
-                    
-                elif current_action == 3:
+
+                elif current_action == 3:  # Salto
                     print('Action 3')
                     exit()
-                    pass 
-                
-                elif current_action == 4:
+                    pass
+
+                elif current_action == 4:  # Aceita
                     print('OK -> Accepted')
                     return table
-        
+
         parser(scanner())
                 
 analise = Analise(semInalcancaveis)
